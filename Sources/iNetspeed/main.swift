@@ -775,7 +775,7 @@ actor PerAppTrafficMonitor {
             inactiveAppQueue.append(name)
         }
 
-        for name in inactiveAppQueue {
+        for name in inactiveAppQueue.reversed() {
             guard let last = knownApps[name], !activeNames.contains(name) else { continue }
             snapshots.append(PerAppSnapshot(
                 processName: name,
