@@ -685,6 +685,7 @@ actor PerAppTrafficMonitor {
     private var previousCounts: [String: (rx: UInt64, tx: UInt64)] = [:]
     private var previousDate: Date?
     private var knownApps: [String: PerAppSnapshot] = [:]
+    private var inactiveAppQueue: [String] = []
     private var isSampling = false
     private var lastSnapshots: [PerAppSnapshot] = []
     private var rootPidCache: [String: pid_t] = [:]   // keyed by nettop "name.pid"
@@ -749,7 +750,7 @@ actor PerAppTrafficMonitor {
             }
         }
 
-        var snapshots: [PerAppSnapshot] = []
+        var activeSnapshots: [PerAppSnapshot] = []
         for (name, totals) in byName {
             let snapshot = PerAppSnapshot(
                 processName: name,
@@ -757,12 +758,25 @@ actor PerAppTrafficMonitor {
                 downloadBytesPerSecond: totals.dl,
                 uploadBytesPerSecond: totals.ul
             )
-            snapshots.append(snapshot)
+            activeSnapshots.append(snapshot)
             knownApps[name] = snapshot
             activeNames.insert(name)
         }
 
-        for (name, last) in knownApps where !activeNames.contains(name) {
+        var snapshots = activeSnapshots.sorted { $0.totalBytesPerSecond > $1.totalBytesPerSecond }
+        let previousDisplayNames = lastSnapshots.map(\.processName)
+        let inactiveNames = Set(knownApps.keys).subtracting(activeNames)
+
+        inactiveAppQueue.removeAll { activeNames.contains($0) || knownApps[$0] == nil }
+        for name in previousDisplayNames where inactiveNames.contains(name) && !inactiveAppQueue.contains(name) {
+            inactiveAppQueue.append(name)
+        }
+        for name in inactiveNames.sorted() where !inactiveAppQueue.contains(name) {
+            inactiveAppQueue.append(name)
+        }
+
+        for name in inactiveAppQueue {
+            guard let last = knownApps[name], !activeNames.contains(name) else { continue }
             snapshots.append(PerAppSnapshot(
                 processName: name,
                 pid: last.pid,
@@ -772,10 +786,14 @@ actor PerAppTrafficMonitor {
         }
 
         if knownApps.count > 20 {
-            let sorted = knownApps.sorted { lhs, rhs in
-                lhs.value.totalBytesPerSecond > rhs.value.totalBytesPerSecond
+            let activeCount = activeNames.count
+            let inactiveLimit = max(20 - activeCount, 0)
+            if inactiveAppQueue.count > inactiveLimit {
+                for name in inactiveAppQueue.prefix(inactiveAppQueue.count - inactiveLimit) {
+                    knownApps.removeValue(forKey: name)
+                }
+                inactiveAppQueue.removeFirst(inactiveAppQueue.count - inactiveLimit)
             }
-            knownApps = Dictionary(uniqueKeysWithValues: sorted.prefix(20).map { ($0.key, $0.value) })
         }
 
         rootPidCache = rootPidCache.filter { current[$0.key] != nil }
@@ -785,7 +803,7 @@ actor PerAppTrafficMonitor {
         previousCounts = current
         previousDate = now
 
-        lastSnapshots = snapshots.sorted { $0.totalBytesPerSecond > $1.totalBytesPerSecond }
+        lastSnapshots = snapshots
         return lastSnapshots
     }
 
