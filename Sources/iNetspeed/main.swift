@@ -266,8 +266,8 @@ private final class SummaryMenuView: NSView {
         uploadLabel.textColor = .systemGreen
 
         for label in [chartStartLabel, chartEndLabel] {
-            label.font = .systemFont(ofSize: 8, weight: .regular)
-            label.textColor = .quaternaryLabelColor
+            label.font = .systemFont(ofSize: 9, weight: .medium)
+            label.textColor = .tertiaryLabelColor
         }
         chartEndLabel.alignment = .right
 
@@ -292,9 +292,9 @@ private final class SummaryMenuView: NSView {
         uploadCaptionLabel.frame = NSRect(x: 12 + halfWidth, y: 101, width: halfWidth, height: 11)
         downloadLabel.frame = NSRect(x: 12, y: 79, width: halfWidth, height: 18)
         uploadLabel.frame = NSRect(x: 12 + halfWidth, y: 79, width: halfWidth, height: 18)
-        chartView.frame = NSRect(x: 12, y: 8, width: width, height: 64)
-        chartStartLabel.frame = NSRect(x: 18, y: 12, width: 40, height: 9)
-        chartEndLabel.frame = NSRect(x: 12 + width - 30, y: 12, width: 28, height: 9)
+        chartView.frame = NSRect(x: 12, y: 20, width: width, height: 56)
+        chartStartLabel.frame = NSRect(x: 18, y: 8, width: 48, height: 12)
+        chartEndLabel.frame = NSRect(x: 12 + width - 30, y: 8, width: 28, height: 12)
     }
 }
 
