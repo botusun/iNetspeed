@@ -302,19 +302,60 @@ private final class SummaryMenuView: NSView {
 
 @MainActor
 private final class SpeedHistoryChartView: NSView {
+    private static let targetBucketCount = 72
     private var cachedBuckets: [SpeedHistoryPoint]
+    private var cachedDownloadRatios: [CGFloat]
+    private var cachedUploadRatios: [CGFloat]
+    private var updatesSinceBucketAdvance = 0
     private var hoverX: CGFloat?
     private let formatter = SpeedFormatter()
 
     init(history: [SpeedHistoryPoint]) {
-        cachedBuckets = SpeedHistoryChartView.makeBuckets(from: history)
+        let buckets = SpeedHistoryChartView.makeBuckets(from: history)
+        let ratios = SpeedHistoryChartView.makeRatios(for: buckets)
+        cachedBuckets = buckets
+        cachedDownloadRatios = ratios.download
+        cachedUploadRatios = ratios.upload
         super.init(frame: NSRect(x: 0, y: 0, width: 296, height: 52))
     }
 
     required init?(coder: NSCoder) { nil }
 
     func update(history: [SpeedHistoryPoint]) {
-        cachedBuckets = SpeedHistoryChartView.makeBuckets(from: history)
+        let buckets = SpeedHistoryChartView.makeBuckets(from: history)
+        let freshRatios = SpeedHistoryChartView.makeRatios(for: buckets)
+        let bucketAdvanceInterval = max(1, Int(ceil(Double(history.count) / Double(Self.targetBucketCount))))
+
+        if cachedBuckets.count == buckets.count,
+           cachedDownloadRatios.count == buckets.count,
+           cachedUploadRatios.count == buckets.count,
+           let freshBucket = buckets.last,
+           let freshDownload = freshRatios.download.last,
+           let freshUpload = freshRatios.upload.last {
+            updatesSinceBucketAdvance += 1
+            if updatesSinceBucketAdvance >= bucketAdvanceInterval {
+                cachedBuckets = Array(cachedBuckets.dropFirst()) + [freshBucket]
+                cachedDownloadRatios = Array(cachedDownloadRatios.dropFirst()) + [freshDownload]
+                cachedUploadRatios = Array(cachedUploadRatios.dropFirst()) + [freshUpload]
+                updatesSinceBucketAdvance = 0
+            } else if !cachedBuckets.isEmpty {
+                cachedBuckets[cachedBuckets.count - 1] = freshBucket
+                cachedDownloadRatios[cachedDownloadRatios.count - 1] = freshDownload
+                cachedUploadRatios[cachedUploadRatios.count - 1] = freshUpload
+            }
+        } else if cachedDownloadRatios.count < buckets.count,
+                  cachedUploadRatios.count < buckets.count {
+            let startIndex = cachedBuckets.count
+            cachedBuckets += buckets.dropFirst(startIndex)
+            cachedDownloadRatios += freshRatios.download.dropFirst(startIndex)
+            cachedUploadRatios += freshRatios.upload.dropFirst(startIndex)
+            updatesSinceBucketAdvance = 0
+        } else {
+            cachedBuckets = buckets
+            cachedDownloadRatios = freshRatios.download
+            cachedUploadRatios = freshRatios.upload
+            updatesSinceBucketAdvance = 0
+        }
         needsDisplay = true
     }
 
@@ -352,28 +393,49 @@ private final class SpeedHistoryChartView: NSView {
         roundedClip.addClip()
 
         let plotRect = bounds.insetBy(dx: 6, dy: 5)
-        let maxValue = max(
-            buckets.map(\.downloadBytesPerSecond).max() ?? 0,
-            buckets.map(\.uploadBytesPerSecond).max() ?? 0,
-            1
+        let midY = plotRect.midY.rounded(.toNearestOrAwayFromZero)
+        let chartGap: CGFloat = 3
+        let uploadRect = NSRect(
+            x: plotRect.minX,
+            y: midY + chartGap,
+            width: plotRect.width,
+            height: plotRect.maxY - midY - chartGap
         )
+        let downloadRect = NSRect(
+            x: plotRect.minX,
+            y: plotRect.minY,
+            width: plotRect.width,
+            height: midY - plotRect.minY - chartGap
+        )
+        let dlValues = cachedDownloadRatios
+        let ulValues = cachedUploadRatios
 
-        let toRatio = { (v: Double) in CGFloat(min(max(v / maxValue, 0), 1)) }
-        let dlValues = buckets.map { toRatio($0.downloadBytesPerSecond) }
-        let ulValues = buckets.map { toRatio($0.uploadBytesPerSecond) }
+        drawChartPanel(in: uploadRect, color: .systemGreen)
+        drawChartPanel(in: downloadRect, color: .systemBlue)
 
-        NSColor.separatorColor.withAlphaComponent(0.18).setStroke()
+        NSColor.separatorColor.withAlphaComponent(0.12).setStroke()
         let gridPath = NSBezierPath()
-        for fraction: CGFloat in [0.25, 0.5, 0.75] {
-            let y = (plotRect.minY + plotRect.height * fraction).rounded(.toNearestOrAwayFromZero)
-            gridPath.move(to: NSPoint(x: plotRect.minX, y: y))
-            gridPath.line(to: NSPoint(x: plotRect.maxX, y: y))
+        for rect in [uploadRect, downloadRect] {
+            let y = rect.midY.rounded(.toNearestOrAwayFromZero)
+            gridPath.move(to: NSPoint(x: rect.minX, y: y))
+            gridPath.line(to: NSPoint(x: rect.maxX, y: y))
         }
         gridPath.lineWidth = 0.5
         gridPath.stroke()
 
-        drawArea(values: dlValues, color: .systemBlue, in: plotRect)
-        drawArea(values: ulValues, color: .systemGreen, in: plotRect)
+        drawBars(values: ulValues, color: .systemGreen, in: uploadRect, direction: .up)
+        drawBars(values: dlValues, color: .systemBlue, in: downloadRect, direction: .down)
+
+        let centerBand = NSBezierPath(rect: NSRect(x: plotRect.minX, y: midY - 1.5, width: plotRect.width, height: 3))
+        NSColor.labelColor.withAlphaComponent(0.16).setFill()
+        centerBand.fill()
+
+        let centerLine = NSBezierPath()
+        centerLine.move(to: NSPoint(x: plotRect.minX, y: midY))
+        centerLine.line(to: NSPoint(x: plotRect.maxX, y: midY))
+        centerLine.lineWidth = 1
+        NSColor.labelColor.withAlphaComponent(0.46).setStroke()
+        centerLine.stroke()
 
         if let hoverX {
             let clampedX = max(plotRect.minX, min(hoverX, plotRect.maxX))
@@ -381,8 +443,8 @@ private final class SpeedHistoryChartView: NSView {
             let index = min(max(Int((fraction * CGFloat(buckets.count - 1)).rounded()), 0), buckets.count - 1)
             drawHoverOverlay(index: index, x: clampedX,
                              bucket: buckets[index],
-                             dlY: plotRect.minY + plotRect.height * dlValues[index],
-                             ulY: plotRect.minY + plotRect.height * ulValues[index],
+                             dlY: downloadRect.maxY - downloadRect.height * dlValues[index],
+                             ulY: uploadRect.minY + uploadRect.height * ulValues[index],
                              plotRect: plotRect)
         }
     }
@@ -432,38 +494,92 @@ private final class SpeedHistoryChartView: NSView {
         tip.draw(at: NSPoint(x: tipX + hPad, y: tipY + vPad))
     }
 
-    private func drawArea(values: [CGFloat], color: NSColor, in rect: NSRect) {
+    private enum BarDirection {
+        case up
+        case down
+    }
+
+    private func drawChartPanel(in rect: NSRect, color: NSColor) {
+        let path = NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4)
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let tintAlpha: CGFloat = isDark ? 0.10 : 0.07
+        let washAlpha: CGFloat = isDark ? 0.035 : 0.025
+
+        if let gradient = NSGradient(
+            starting: color.withAlphaComponent(tintAlpha),
+            ending: NSColor.labelColor.withAlphaComponent(washAlpha)
+        ) {
+            gradient.draw(in: path, angle: 90)
+        } else {
+            color.withAlphaComponent(tintAlpha).setFill()
+            path.fill()
+        }
+
+        NSColor.separatorColor.withAlphaComponent(0.10).setStroke()
+        path.lineWidth = 0.5
+        path.stroke()
+    }
+
+    private func drawBars(values: [CGFloat], color: NSColor, in rect: NSRect, direction: BarDirection) {
         guard values.count > 1 else { return }
 
-        let stepX = rect.width / CGFloat(values.count - 1)
-        let points = values.enumerated().map { i, ratio in
-            NSPoint(x: rect.minX + CGFloat(i) * stepX, y: rect.minY + rect.height * ratio)
+        let stepX = rect.width / CGFloat(values.count)
+        let barWidth = max(1, floor(stepX * 0.68))
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let baseAlpha: CGFloat = isDark ? 0.52 : 0.56
+        let peakAlpha: CGFloat = isDark ? 0.90 : 0.84
+
+        for (index, ratio) in values.enumerated() {
+            let height = floor(rect.height * ratio)
+            guard height >= 1 else { continue }
+            let x = rect.minX + CGFloat(index) * stepX + (stepX - barWidth) / 2
+            let y = switch direction {
+            case .up:
+                rect.minY
+            case .down:
+                rect.maxY - height
+            }
+            let barRect = NSRect(x: x, y: y, width: barWidth, height: height)
+            let radius = min(min(2.0, barWidth / 2), height / 2)
+            let barPath = tipRoundedPath(rect: barRect, radius: radius, direction: direction)
+            let startColor = color.withAlphaComponent(direction == .up ? baseAlpha : peakAlpha)
+            let endColor = color.withAlphaComponent(direction == .up ? peakAlpha : baseAlpha)
+
+            if let gradient = NSGradient(starting: startColor, ending: endColor) {
+                gradient.draw(in: barPath, angle: 90)
+            } else {
+                color.withAlphaComponent(peakAlpha).setFill()
+                barPath.fill()
+            }
         }
+    }
 
-        let linePath = NSBezierPath()
-        linePath.move(to: points[0])
-        for i in 1..<points.count {
-            let cp1 = NSPoint(x: points[i - 1].x + stepX * 0.4, y: points[i - 1].y)
-            let cp2 = NSPoint(x: points[i].x - stepX * 0.4, y: points[i].y)
-            linePath.curve(to: points[i], controlPoint1: cp1, controlPoint2: cp2)
+    private func tipRoundedPath(rect: NSRect, radius r: CGFloat, direction: BarDirection) -> NSBezierPath {
+        guard r > 0 else { return NSBezierPath(rect: rect) }
+        let path = NSBezierPath()
+        switch direction {
+        case .up:
+            path.move(to: NSPoint(x: rect.minX, y: rect.minY))
+            path.line(to: NSPoint(x: rect.maxX, y: rect.minY))
+            path.line(to: NSPoint(x: rect.maxX, y: rect.maxY - r))
+            path.appendArc(withCenter: NSPoint(x: rect.maxX - r, y: rect.maxY - r), radius: r, startAngle: 0, endAngle: 90)
+            path.line(to: NSPoint(x: rect.minX + r, y: rect.maxY))
+            path.appendArc(withCenter: NSPoint(x: rect.minX + r, y: rect.maxY - r), radius: r, startAngle: 90, endAngle: 180)
+            path.close()
+        case .down:
+            path.move(to: NSPoint(x: rect.minX, y: rect.maxY))
+            path.line(to: NSPoint(x: rect.maxX, y: rect.maxY))
+            path.line(to: NSPoint(x: rect.maxX, y: rect.minY + r))
+            path.appendArc(withCenter: NSPoint(x: rect.maxX - r, y: rect.minY + r), radius: r, startAngle: 0, endAngle: -90, clockwise: true)
+            path.line(to: NSPoint(x: rect.minX + r, y: rect.minY))
+            path.appendArc(withCenter: NSPoint(x: rect.minX + r, y: rect.minY + r), radius: r, startAngle: -90, endAngle: 180, clockwise: true)
+            path.close()
         }
-
-        guard let fillPath = linePath.copy() as? NSBezierPath else { return }
-        fillPath.line(to: NSPoint(x: rect.maxX, y: rect.minY))
-        fillPath.line(to: NSPoint(x: rect.minX, y: rect.minY))
-        fillPath.close()
-        NSGradient(starting: color.withAlphaComponent(0.50), ending: color.withAlphaComponent(0.03))!
-            .draw(in: fillPath, angle: 90)
-
-        linePath.lineWidth = 1.5
-        linePath.lineCapStyle = .round
-        linePath.lineJoinStyle = .round
-        color.withAlphaComponent(0.9).setStroke()
-        linePath.stroke()
+        return path
     }
 
     private static func makeBuckets(from history: [SpeedHistoryPoint]) -> [SpeedHistoryPoint] {
-        let targetBucketCount = 72
+        let targetBucketCount = Self.targetBucketCount
         guard history.count > targetBucketCount else { return history }
 
         let bucketSize = Int(ceil(Double(history.count) / Double(targetBucketCount)))
@@ -481,6 +597,16 @@ private final class SpeedHistoryChartView: NSView {
         }
 
         return buckets
+    }
+
+    private static func makeRatios(for buckets: [SpeedHistoryPoint]) -> (download: [CGFloat], upload: [CGFloat]) {
+        let maxDownload = max(buckets.map(\.downloadBytesPerSecond).max() ?? 0, 1)
+        let maxUpload = max(buckets.map(\.uploadBytesPerSecond).max() ?? 0, 1)
+        let toRatio = { (value: Double, maxValue: Double) in CGFloat(min(max(value / maxValue, 0), 1)) }
+        return (
+            buckets.map { toRatio($0.downloadBytesPerSecond, maxDownload) },
+            buckets.map { toRatio($0.uploadBytesPerSecond, maxUpload) }
+        )
     }
 }
 
