@@ -323,39 +323,32 @@ private final class SpeedHistoryChartView: NSView {
 
     func update(history: [SpeedHistoryPoint]) {
         let buckets = SpeedHistoryChartView.makeBuckets(from: history)
-        let freshRatios = SpeedHistoryChartView.makeRatios(for: buckets)
         let bucketAdvanceInterval = max(1, Int(ceil(Double(history.count) / Double(Self.targetBucketCount))))
 
         if cachedBuckets.count == buckets.count,
            cachedDownloadRatios.count == buckets.count,
            cachedUploadRatios.count == buckets.count,
-           let freshBucket = buckets.last,
-           let freshDownload = freshRatios.download.last,
-           let freshUpload = freshRatios.upload.last {
+           let freshBucket = buckets.last {
             updatesSinceBucketAdvance += 1
             if updatesSinceBucketAdvance >= bucketAdvanceInterval {
                 cachedBuckets = Array(cachedBuckets.dropFirst()) + [freshBucket]
-                cachedDownloadRatios = Array(cachedDownloadRatios.dropFirst()) + [freshDownload]
-                cachedUploadRatios = Array(cachedUploadRatios.dropFirst()) + [freshUpload]
                 updatesSinceBucketAdvance = 0
             } else if !cachedBuckets.isEmpty {
                 cachedBuckets[cachedBuckets.count - 1] = freshBucket
-                cachedDownloadRatios[cachedDownloadRatios.count - 1] = freshDownload
-                cachedUploadRatios[cachedUploadRatios.count - 1] = freshUpload
             }
         } else if cachedDownloadRatios.count < buckets.count,
                   cachedUploadRatios.count < buckets.count {
             let startIndex = cachedBuckets.count
             cachedBuckets += buckets.dropFirst(startIndex)
-            cachedDownloadRatios += freshRatios.download.dropFirst(startIndex)
-            cachedUploadRatios += freshRatios.upload.dropFirst(startIndex)
             updatesSinceBucketAdvance = 0
         } else {
             cachedBuckets = buckets
-            cachedDownloadRatios = freshRatios.download
-            cachedUploadRatios = freshRatios.upload
             updatesSinceBucketAdvance = 0
         }
+
+        let ratios = SpeedHistoryChartView.makeRatios(for: cachedBuckets)
+        cachedDownloadRatios = ratios.download
+        cachedUploadRatios = ratios.upload
         needsDisplay = true
     }
 
