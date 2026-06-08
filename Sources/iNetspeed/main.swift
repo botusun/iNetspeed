@@ -801,6 +801,20 @@ final class NetworkSpeedMonitor {
 // MARK: - Per-App Traffic Monitor
 
 actor PerAppTrafficMonitor {
+    private static let ignoredAppNames: Set<String> = [
+        "charles",
+        "clash verge",
+        "clashx",
+        "little snitch",
+        "proxyman",
+        "shadowrocket",
+        "surge",
+        "tailscale",
+        "tunnelblick",
+        "v2rayu",
+        "wireguard"
+    ]
+
     private var previousCounts: [String: (rx: UInt64, tx: UInt64)] = [:]
     private var previousDate: Date?
     private var knownApps: [String: PerAppSnapshot] = [:]
@@ -848,6 +862,8 @@ actor PerAppTrafficMonitor {
                 appNameCache[root] = resolved
                 name = resolved
             }
+            guard !PerAppTrafficMonitor.shouldIgnoreApp(named: name) else { continue }
+
             let dl = Double(rxDelta) / elapsed
             let ul = Double(txDelta) / elapsed
 
@@ -926,6 +942,10 @@ actor PerAppTrafficMonitor {
         return lastSnapshots
     }
 
+    private static func shouldIgnoreApp(named name: String) -> Bool {
+        ignoredAppNames.contains(name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+    }
+
     private static func rootPid(_ pid: pid_t) -> pid_t {
         var current = pid
         for _ in 0..<8 {
@@ -958,7 +978,7 @@ actor PerAppTrafficMonitor {
                 let pipe = Pipe()
                 let proc = Process()
                 proc.executableURL = URL(fileURLWithPath: "/usr/bin/nettop")
-                let args = ["-x", "-n", "-L", "1", "-P", "-t", "wifi", "-t", "wired", "-t", "expensive"]
+                let args = ["-x", "-n", "-L", "1", "-P"]
                 proc.arguments = args
                 proc.standardOutput = pipe
                 proc.standardError = Pipe()
