@@ -953,12 +953,13 @@ actor PerAppTrafficMonitor {
     }
 
     private func fetchNettopData() async -> [String: (rx: UInt64, tx: UInt64)] {
-        await withCheckedContinuation { continuation in
+        return await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
                 let pipe = Pipe()
                 let proc = Process()
                 proc.executableURL = URL(fileURLWithPath: "/usr/bin/nettop")
-                proc.arguments = ["-x", "-n", "-L", "1", "-P"]
+                let args = ["-x", "-n", "-L", "1", "-P", "-t", "wifi", "-t", "wired", "-t", "expensive"]
+                proc.arguments = args
                 proc.standardOutput = pipe
                 proc.standardError = Pipe()
 
@@ -998,6 +999,10 @@ private struct InterfaceCounters {
     let receivedBytes: UInt64
     let sentBytes: UInt64
 
+    static func isVirtual(_ name: String) -> Bool {
+        name.hasPrefix("lo") || name.hasPrefix("utun") || name.hasPrefix("ppp") || name.hasPrefix("ipsec")
+    }
+
     static func readAll() -> [InterfaceCounters] {
         var interfaces: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&interfaces) == 0, let firstInterface = interfaces else {
@@ -1022,7 +1027,7 @@ private struct InterfaceCounters {
             }
 
             let name = String(cString: interface.pointee.ifa_name)
-            guard !name.hasPrefix("lo") else {
+            guard !InterfaceCounters.isVirtual(name) else {
                 continue
             }
 
