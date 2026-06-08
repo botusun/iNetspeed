@@ -19,12 +19,12 @@ enum iNetspeedApp {
 @MainActor
 private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private static let speedHistoryCapacity = 1_800
-    private static let menuWidth: CGFloat = 300
+    private static let menuWidth: CGFloat = 340
 
     private let monitor = NetworkSpeedMonitor()
     private let formatter = SpeedFormatter()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    private let statusView = StatusItemView(frame: NSRect(x: 0, y: 0, width: 38, height: NSStatusBar.system.thickness))
+    private let statusView = StatusItemView(frame: NSRect(x: 0, y: 0, width: 44, height: NSStatusBar.system.thickness))
     private let perAppMonitor = PerAppTrafficMonitor()
 
     private var timer: Timer?
@@ -61,7 +61,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     }
 
     private func configureStatusItem() {
-        statusItem.length = 38
+        statusItem.length = 44
 
         guard let button = statusItem.button else {
             return
@@ -189,7 +189,7 @@ private final class StatusItemView: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
-        NSSize(width: 38, height: NSStatusBar.system.thickness)
+        NSSize(width: 44, height: NSStatusBar.system.thickness)
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -200,8 +200,8 @@ private final class StatusItemView: NSView {
         super.layout()
 
         let halfHeight = bounds.height / 2
-        let arrowWidth: CGFloat = 9
-        let valueWidth = bounds.width - arrowWidth
+        let arrowWidth: CGFloat = 10
+        let valueWidth = bounds.width - arrowWidth - 1
 
         uploadArrowLabel.frame = NSRect(x: 0, y: halfHeight - 1, width: arrowWidth, height: halfHeight)
         uploadValueLabel.frame = NSRect(x: arrowWidth, y: halfHeight - 1, width: valueWidth, height: halfHeight)
@@ -217,16 +217,16 @@ private final class StatusItemView: NSView {
     private static func makeArrowLabel(_ value: String) -> NSTextField {
         let label = NSTextField(labelWithString: value)
         label.alignment = .left
-        label.font = .monospacedDigitSystemFont(ofSize: 8.5, weight: .heavy)
+        label.font = .monospacedDigitSystemFont(ofSize: 9, weight: .heavy)
         label.lineBreakMode = .byClipping
-        label.textColor = .labelColor
+        label.textColor = value == "↓" ? .systemBlue : .systemGreen
         return label
     }
 
     private static func makeValueLabel() -> NSTextField {
         let label = NSTextField(labelWithString: "")
         label.alignment = .right
-        label.font = .monospacedDigitSystemFont(ofSize: 8.5, weight: .heavy)
+        label.font = .monospacedDigitSystemFont(ofSize: 8.8, weight: .bold)
         label.lineBreakMode = .byTruncatingTail
         label.textColor = .labelColor
         return label
@@ -237,7 +237,7 @@ private final class StatusItemView: NSView {
 
 @MainActor
 private final class SummaryMenuView: NSView {
-    static let menuHeight: CGFloat = 120
+    static let menuHeight: CGFloat = 144
 
     private let downloadCaptionLabel = NSTextField(labelWithString: "DOWNLOAD")
     private let uploadCaptionLabel = NSTextField(labelWithString: "UPLOAD")
@@ -252,17 +252,17 @@ private final class SummaryMenuView: NSView {
         super.init(frame: NSRect(x: 0, y: 0, width: width, height: Self.menuHeight))
 
         downloadCaptionLabel.font = .systemFont(ofSize: 9, weight: .semibold)
-        downloadCaptionLabel.textColor = .systemBlue.withAlphaComponent(0.75)
+        downloadCaptionLabel.textColor = .systemBlue.withAlphaComponent(0.85)
 
         uploadCaptionLabel.font = .systemFont(ofSize: 9, weight: .semibold)
-        uploadCaptionLabel.textColor = .systemGreen.withAlphaComponent(0.75)
+        uploadCaptionLabel.textColor = .systemGreen.withAlphaComponent(0.85)
 
         downloadLabel.stringValue = download
-        downloadLabel.font = .monospacedDigitSystemFont(ofSize: 16, weight: .bold)
+        downloadLabel.font = .monospacedDigitSystemFont(ofSize: 18, weight: .bold)
         downloadLabel.textColor = .systemBlue
 
         uploadLabel.stringValue = upload
-        uploadLabel.font = .monospacedDigitSystemFont(ofSize: 16, weight: .bold)
+        uploadLabel.font = .monospacedDigitSystemFont(ofSize: 18, weight: .bold)
         uploadLabel.textColor = .systemGreen
 
         for label in [chartStartLabel, chartEndLabel] {
@@ -277,6 +277,18 @@ private final class SummaryMenuView: NSView {
 
     required init?(coder: NSCoder) { nil }
 
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        let contentRect = bounds.insetBy(dx: 8, dy: 7)
+        let metricsRect = NSRect(x: contentRect.minX + 4, y: 82, width: contentRect.width - 8, height: 48)
+        let leftRect = NSRect(x: metricsRect.minX, y: metricsRect.minY, width: (metricsRect.width - 8) / 2, height: metricsRect.height)
+        let rightRect = NSRect(x: leftRect.maxX + 8, y: metricsRect.minY, width: leftRect.width, height: metricsRect.height)
+
+        drawMetricBackdrop(leftRect, color: .systemBlue)
+        drawMetricBackdrop(rightRect, color: .systemGreen)
+    }
+
     func update(download: String, upload: String, history: [SpeedHistoryPoint]) {
         downloadLabel.stringValue = download
         uploadLabel.stringValue = upload
@@ -286,15 +298,26 @@ private final class SummaryMenuView: NSView {
     override func layout() {
         super.layout()
 
-        let width = bounds.width - 24
-        let halfWidth = width / 2
-        downloadCaptionLabel.frame = NSRect(x: 12, y: 101, width: halfWidth, height: 11)
-        uploadCaptionLabel.frame = NSRect(x: 12 + halfWidth, y: 101, width: halfWidth, height: 11)
-        downloadLabel.frame = NSRect(x: 12, y: 79, width: halfWidth, height: 18)
-        uploadLabel.frame = NSRect(x: 12 + halfWidth, y: 79, width: halfWidth, height: 18)
-        chartView.frame = NSRect(x: 12, y: 20, width: width, height: 56)
-        chartStartLabel.frame = NSRect(x: 18, y: 8, width: 48, height: 12)
-        chartEndLabel.frame = NSRect(x: 12 + width - 30, y: 8, width: 28, height: 12)
+        let width = bounds.width - 32
+        let gap: CGFloat = 8
+        let halfWidth = (width - gap) / 2
+        downloadCaptionLabel.frame = NSRect(x: 18, y: 114, width: halfWidth - 12, height: 11)
+        uploadCaptionLabel.frame = NSRect(x: 18 + halfWidth + gap, y: 114, width: halfWidth - 12, height: 11)
+        downloadLabel.frame = NSRect(x: 18, y: 92, width: halfWidth - 12, height: 22)
+        uploadLabel.frame = NSRect(x: 18 + halfWidth + gap, y: 92, width: halfWidth - 12, height: 22)
+        chartView.frame = NSRect(x: 16, y: 24, width: width, height: 54)
+        chartStartLabel.frame = NSRect(x: 20, y: 9, width: 54, height: 12)
+        chartEndLabel.frame = NSRect(x: 16 + width - 34, y: 9, width: 34, height: 12)
+    }
+
+    private func drawMetricBackdrop(_ rect: NSRect, color: NSColor) {
+        let path = NSBezierPath(roundedRect: rect, xRadius: 7, yRadius: 7)
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        color.withAlphaComponent(isDark ? 0.13 : 0.08).setFill()
+        path.fill()
+        color.withAlphaComponent(isDark ? 0.22 : 0.14).setStroke()
+        path.lineWidth = 0.5
+        path.stroke()
     }
 }
 
@@ -377,8 +400,12 @@ private final class SpeedHistoryChartView: NSView {
         super.draw(dirtyRect)
 
         let roundedClip = NSBezierPath(roundedRect: bounds, xRadius: 8, yRadius: 8)
-        NSColor.separatorColor.withAlphaComponent(0.10).setFill()
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        (isDark ? NSColor(white: 1.0, alpha: 0.055) : NSColor(white: 0.0, alpha: 0.035)).setFill()
         roundedClip.fill()
+        NSColor.separatorColor.withAlphaComponent(isDark ? 0.20 : 0.16).setStroke()
+        roundedClip.lineWidth = 0.5
+        roundedClip.stroke()
 
         let buckets = cachedBuckets
         guard buckets.count > 1 else { return }
@@ -406,28 +433,33 @@ private final class SpeedHistoryChartView: NSView {
         drawChartPanel(in: uploadRect, color: .systemGreen)
         drawChartPanel(in: downloadRect, color: .systemBlue)
 
-        NSColor.separatorColor.withAlphaComponent(0.12).setStroke()
         let gridPath = NSBezierPath()
         for rect in [uploadRect, downloadRect] {
             let y = rect.midY.rounded(.toNearestOrAwayFromZero)
             gridPath.move(to: NSPoint(x: rect.minX, y: y))
             gridPath.line(to: NSPoint(x: rect.maxX, y: y))
         }
+        for index in 1..<4 {
+            let x = (plotRect.minX + plotRect.width * CGFloat(index) / 4).rounded(.toNearestOrAwayFromZero)
+            gridPath.move(to: NSPoint(x: x, y: plotRect.minY))
+            gridPath.line(to: NSPoint(x: x, y: plotRect.maxY))
+        }
         gridPath.lineWidth = 0.5
+        NSColor.separatorColor.withAlphaComponent(isDark ? 0.15 : 0.12).setStroke()
         gridPath.stroke()
 
         drawBars(values: ulValues, color: .systemGreen, in: uploadRect, direction: .up)
         drawBars(values: dlValues, color: .systemBlue, in: downloadRect, direction: .down)
 
         let centerBand = NSBezierPath(rect: NSRect(x: plotRect.minX, y: midY - 1.5, width: plotRect.width, height: 3))
-        NSColor.labelColor.withAlphaComponent(0.16).setFill()
+        NSColor.labelColor.withAlphaComponent(isDark ? 0.18 : 0.12).setFill()
         centerBand.fill()
 
         let centerLine = NSBezierPath()
         centerLine.move(to: NSPoint(x: plotRect.minX, y: midY))
         centerLine.line(to: NSPoint(x: plotRect.maxX, y: midY))
         centerLine.lineWidth = 1
-        NSColor.labelColor.withAlphaComponent(0.46).setStroke()
+        NSColor.labelColor.withAlphaComponent(isDark ? 0.42 : 0.32).setStroke()
         centerLine.stroke()
 
         if let hoverX {
@@ -448,7 +480,7 @@ private final class SpeedHistoryChartView: NSView {
         line.move(to: NSPoint(x: x, y: plotRect.minY))
         line.line(to: NSPoint(x: x, y: plotRect.maxY))
         line.lineWidth = 1
-        NSColor.labelColor.withAlphaComponent(0.25).setStroke()
+        NSColor.labelColor.withAlphaComponent(0.28).setStroke()
         line.stroke()
 
         for (y, color) in [(dlY, NSColor.systemBlue), (ulY, NSColor.systemGreen)] {
@@ -479,9 +511,9 @@ private final class SpeedHistoryChartView: NSView {
         let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         let tipRect = NSRect(x: tipX, y: tipY, width: tipW, height: tipH)
         let tipPath = NSBezierPath(roundedRect: tipRect, xRadius: 4, yRadius: 4)
-        (isDark ? NSColor(white: 0.15, alpha: 0.95) : NSColor(white: 0.97, alpha: 0.95)).setFill()
+        (isDark ? NSColor(white: 0.11, alpha: 0.96) : NSColor(white: 1.0, alpha: 0.96)).setFill()
         tipPath.fill()
-        NSColor.separatorColor.withAlphaComponent(0.35).setStroke()
+        NSColor.separatorColor.withAlphaComponent(isDark ? 0.45 : 0.28).setStroke()
         tipPath.lineWidth = 0.5
         tipPath.stroke()
         tip.draw(at: NSPoint(x: tipX + hPad, y: tipY + vPad))
@@ -495,8 +527,8 @@ private final class SpeedHistoryChartView: NSView {
     private func drawChartPanel(in rect: NSRect, color: NSColor) {
         let path = NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4)
         let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        let tintAlpha: CGFloat = isDark ? 0.10 : 0.07
-        let washAlpha: CGFloat = isDark ? 0.035 : 0.025
+        let tintAlpha: CGFloat = isDark ? 0.16 : 0.09
+        let washAlpha: CGFloat = isDark ? 0.045 : 0.025
 
         if let gradient = NSGradient(
             starting: color.withAlphaComponent(tintAlpha),
@@ -508,7 +540,7 @@ private final class SpeedHistoryChartView: NSView {
             path.fill()
         }
 
-        NSColor.separatorColor.withAlphaComponent(0.10).setStroke()
+        NSColor.separatorColor.withAlphaComponent(isDark ? 0.18 : 0.12).setStroke()
         path.lineWidth = 0.5
         path.stroke()
     }
@@ -519,8 +551,8 @@ private final class SpeedHistoryChartView: NSView {
         let stepX = rect.width / CGFloat(values.count)
         let barWidth = max(1, floor(stepX * 0.68))
         let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        let baseAlpha: CGFloat = isDark ? 0.52 : 0.56
-        let peakAlpha: CGFloat = isDark ? 0.90 : 0.84
+        let baseAlpha: CGFloat = isDark ? 0.45 : 0.42
+        let peakAlpha: CGFloat = isDark ? 0.92 : 0.82
 
         for (index, ratio) in values.enumerated() {
             let height = floor(rect.height * ratio)
@@ -609,8 +641,15 @@ private final class SpeedHistoryChartView: NSView {
 private final class TrafficBarView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        NSColor.controlAccentColor.withAlphaComponent(isDark ? 0.45 : 0.28).setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: 3, yRadius: 3).fill()
+        let path = NSBezierPath(roundedRect: bounds, xRadius: 4, yRadius: 4)
+        let startColor = NSColor.controlAccentColor.withAlphaComponent(isDark ? 0.34 : 0.18)
+        let endColor = NSColor.controlAccentColor.withAlphaComponent(isDark ? 0.62 : 0.34)
+        if let gradient = NSGradient(starting: startColor, ending: endColor) {
+            gradient.draw(in: path, angle: 0)
+        } else {
+            endColor.setFill()
+            path.fill()
+        }
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -622,8 +661,8 @@ private final class TrafficBarView: NSView {
 
 @MainActor
 private final class AppTrafficSectionView: NSView {
-    private static let headerHeight: CGFloat = 28
-    private static let rowHeight: CGFloat = 24
+    private static let headerHeight: CGFloat = 34
+    private static let rowHeight: CGFloat = 26
     private static let maxRows = 6
     static let fixedHeight: CGFloat = headerHeight + CGFloat(maxRows) * rowHeight
 
@@ -640,8 +679,21 @@ private final class AppTrafficSectionView: NSView {
         let headerLabel = NSTextField(labelWithString: "PER-APP TRAFFIC")
         headerLabel.font = .systemFont(ofSize: 9, weight: .semibold)
         headerLabel.textColor = .secondaryLabelColor
-        headerLabel.frame = NSRect(x: 12, y: height - Self.headerHeight + 8, width: width - 24, height: 11)
-        addSubview(headerLabel)
+        headerLabel.frame = NSRect(x: 14, y: height - Self.headerHeight + 16, width: 130, height: 11)
+
+        let downloadHeader = NSTextField(labelWithString: "DOWN")
+        downloadHeader.font = .systemFont(ofSize: 8, weight: .semibold)
+        downloadHeader.textColor = .tertiaryLabelColor
+        downloadHeader.alignment = .right
+        downloadHeader.frame = NSRect(x: width - 126, y: height - Self.headerHeight + 16, width: 54, height: 10)
+
+        let uploadHeader = NSTextField(labelWithString: "UP")
+        uploadHeader.font = .systemFont(ofSize: 8, weight: .semibold)
+        uploadHeader.textColor = .tertiaryLabelColor
+        uploadHeader.alignment = .right
+        uploadHeader.frame = NSRect(x: width - 70, y: height - Self.headerHeight + 16, width: 56, height: 10)
+
+        [headerLabel, downloadHeader, uploadHeader].forEach(addSubview)
         rows.forEach(addSubview)
     }
 
@@ -664,6 +716,8 @@ private final class AppTrafficRowView: NSView {
     private let dlLabel = NSTextField(labelWithString: "")
     private let ulLabel = NSTextField(labelWithString: "")
     private var cachedIconPid: Int?
+    private var hasContent = false
+    private var isActive = false
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -671,18 +725,18 @@ private final class AppTrafficRowView: NSView {
         addSubview(barView)
 
         let pad: CGFloat = 12
-        let iconSize: CGFloat = 16
-        let iconGap: CGFloat = 6
-        let nameColumnWidth: CGFloat = 120
+        let iconSize: CGFloat = 17
+        let iconGap: CGFloat = 7
+        let nameColumnWidth: CGFloat = 150
         let speedWidth: CGFloat = (frame.width - pad * 2 - nameColumnWidth) / 2
 
         iconView.imageScaling = .scaleProportionallyUpOrDown
         iconView.wantsLayer = true
-        iconView.layer?.cornerRadius = 3.5
+        iconView.layer?.cornerRadius = 4
         iconView.layer?.masksToBounds = true
         iconView.frame = NSRect(x: pad, y: (frame.height - iconSize) / 2, width: iconSize, height: iconSize)
 
-        nameLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        nameLabel.font = .systemFont(ofSize: 11.5, weight: .medium)
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.frame = NSRect(x: pad + iconSize + iconGap,
                                  y: (frame.height - 13) / 2,
@@ -702,11 +756,28 @@ private final class AppTrafficRowView: NSView {
 
     required init?(coder: NSCoder) { nil }
 
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        guard hasContent else { return }
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let rowRect = bounds.insetBy(dx: 8, dy: 2)
+        let rowPath = NSBezierPath(roundedRect: rowRect, xRadius: 6, yRadius: 6)
+        let alpha: CGFloat = isActive ? (isDark ? 0.055 : 0.035) : (isDark ? 0.025 : 0.018)
+        NSColor.labelColor.withAlphaComponent(alpha).setFill()
+        rowPath.fill()
+
+        NSColor.separatorColor.withAlphaComponent(isDark ? 0.12 : 0.08).setStroke()
+        rowPath.lineWidth = 0.5
+        rowPath.stroke()
+    }
+
     func update(snapshot: PerAppSnapshot?, formatter: SpeedFormatter, totalSpeed: Double) {
         if let snapshot {
+            hasContent = true
             let ratio = totalSpeed > 0 ? CGFloat(min(snapshot.totalBytesPerSecond / totalSpeed, 1.0)) : 0
             let barWidth = (bounds.width - 24) * ratio
-            barView.frame = NSRect(x: 12, y: 2, width: max(barWidth, 0), height: bounds.height - 4)
+            barView.frame = NSRect(x: 12, y: 4, width: max(barWidth, 0), height: bounds.height - 8)
             barView.isHidden = barWidth < 1
             barView.needsDisplay = true
 
@@ -717,23 +788,30 @@ private final class AppTrafficRowView: NSView {
                 cachedIconPid = snapshot.pid
             }
             let active = snapshot.totalBytesPerSecond > 0
+            isActive = active
             nameLabel.stringValue = snapshot.processName
             nameLabel.textColor = active ? .labelColor : .tertiaryLabelColor
+            iconView.alphaValue = active ? 1.0 : 0.45
             dlLabel.stringValue = "↓ \(formatter.compact(snapshot.downloadBytesPerSecond))"
             dlLabel.textColor = snapshot.downloadBytesPerSecond > 0 ? .systemBlue : .quaternaryLabelColor
             ulLabel.stringValue = "↑ \(formatter.compact(snapshot.uploadBytesPerSecond))"
             ulLabel.textColor = snapshot.uploadBytesPerSecond > 0 ? .systemGreen : .quaternaryLabelColor
+            needsDisplay = true
         } else {
+            hasContent = false
+            isActive = false
             barView.isHidden = true
             if cachedIconPid != nil {
                 iconView.image = nil
                 cachedIconPid = nil
             }
+            iconView.alphaValue = 1
             nameLabel.stringValue = ""
             dlLabel.stringValue = "↓  —"
             dlLabel.textColor = .quaternaryLabelColor
             ulLabel.stringValue = "↑  —"
             ulLabel.textColor = .quaternaryLabelColor
+            needsDisplay = true
         }
     }
 }
