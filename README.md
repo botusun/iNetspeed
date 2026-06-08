@@ -4,7 +4,7 @@ A lightweight native macOS menu bar app that monitors network speed in real time
 
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue) ![Swift 6](https://img.shields.io/badge/Swift-6-orange)
 
-![Screenshot](https://images.voidcode.com/pics/ba4fc6759af8fb4247c23ac74bf60362.png)
+![Screenshot](https://images.voidcode.com/pics/37abf55ab7972a9c8d2f9cb8e487b5e1.png)
 
 ## Features
 
