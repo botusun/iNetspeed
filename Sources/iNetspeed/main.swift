@@ -665,6 +665,9 @@ private final class AppTrafficSectionView: NSView {
     static let fixedHeight: CGFloat = headerHeight + CGFloat(maxRows) * rowHeight
 
     private let rows: [AppTrafficRowView]
+    private let emptyIconView = NSImageView()
+    private let emptyTitleLabel = NSTextField(labelWithString: "Collecting app traffic")
+    private let emptySubtitleLabel = NSTextField(labelWithString: "Activity appears here as apps use the network")
 
     init(width: CGFloat) {
         let height = Self.fixedHeight
@@ -693,15 +696,58 @@ private final class AppTrafficSectionView: NSView {
 
         [headerLabel, downloadHeader, uploadHeader].forEach(addSubview)
         rows.forEach(addSubview)
+
+        emptyIconView.image = NSImage(systemSymbolName: "point.3.connected.trianglepath.dotted", accessibilityDescription: nil)
+        emptyIconView.contentTintColor = .tertiaryLabelColor
+        emptyIconView.imageScaling = .scaleProportionallyUpOrDown
+
+        emptyTitleLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        emptyTitleLabel.textColor = .secondaryLabelColor
+        emptyTitleLabel.alignment = .center
+
+        emptySubtitleLabel.font = .systemFont(ofSize: 10, weight: .regular)
+        emptySubtitleLabel.textColor = .tertiaryLabelColor
+        emptySubtitleLabel.alignment = .center
+
+        [emptyIconView, emptyTitleLabel, emptySubtitleLabel].forEach(addSubview)
     }
 
     required init?(coder: NSCoder) { nil }
+
+    override func layout() {
+        super.layout()
+
+        let centerY = (bounds.height - Self.headerHeight) / 2 - 2
+        emptyIconView.frame = NSRect(x: (bounds.width - 24) / 2, y: centerY + 18, width: 24, height: 24)
+        emptyTitleLabel.frame = NSRect(x: 24, y: centerY - 2, width: bounds.width - 48, height: 16)
+        emptySubtitleLabel.frame = NSRect(x: 24, y: centerY - 20, width: bounds.width - 48, height: 14)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let line = NSBezierPath()
+        line.move(to: NSPoint(x: 12, y: bounds.height - Self.headerHeight + 5.5))
+        line.line(to: NSPoint(x: bounds.width - 12, y: bounds.height - Self.headerHeight + 5.5))
+        line.lineWidth = 0.5
+        NSColor.separatorColor.withAlphaComponent(isDark ? 0.18 : 0.12).setStroke()
+        line.stroke()
+    }
 
     func update(snapshots: [PerAppSnapshot], formatter: SpeedFormatter) {
         let display = Array(snapshots.prefix(Self.maxRows))
         let totalSpeed = display.map(\.totalBytesPerSecond).reduce(0, +)
         for (i, row) in rows.enumerated() {
             row.update(snapshot: i < display.count ? display[i] : nil, formatter: formatter, totalSpeed: totalSpeed)
+        }
+
+        let isEmpty = display.isEmpty
+        emptyIconView.isHidden = !isEmpty
+        emptyTitleLabel.isHidden = !isEmpty
+        emptySubtitleLabel.isHidden = !isEmpty
+        if isEmpty {
+            emptyTitleLabel.stringValue = "No app traffic yet"
         }
     }
 }
@@ -820,14 +866,23 @@ private final class AppTrafficRowView: NSView {
 private final class FooterMenuView: NSView {
     static let fixedHeight: CGFloat = 46
 
+    private let iconView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "iNetspeed")
+    private let subtitleLabel = NSTextField(labelWithString: "Live network monitor")
     private let quitButton = NSButton(title: "Quit", target: nil, action: nil)
 
     init(width: CGFloat, target: AnyObject, action: Selector) {
         super.init(frame: NSRect(x: 0, y: 0, width: width, height: Self.fixedHeight))
 
+        iconView.image = NSImage(systemSymbolName: "speedometer", accessibilityDescription: nil)
+        iconView.contentTintColor = .controlAccentColor
+        iconView.imageScaling = .scaleProportionallyUpOrDown
+
         titleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
-        titleLabel.textColor = .secondaryLabelColor
+        titleLabel.textColor = .labelColor
+
+        subtitleLabel.font = .systemFont(ofSize: 9, weight: .medium)
+        subtitleLabel.textColor = .tertiaryLabelColor
 
         quitButton.target = target
         quitButton.action = action
@@ -838,7 +893,7 @@ private final class FooterMenuView: NSView {
         quitButton.imagePosition = .imageLeading
         quitButton.contentTintColor = .secondaryLabelColor
 
-        [titleLabel, quitButton].forEach(addSubview)
+        [iconView, titleLabel, subtitleLabel, quitButton].forEach(addSubview)
     }
 
     required init?(coder: NSCoder) { nil }
@@ -846,7 +901,9 @@ private final class FooterMenuView: NSView {
     override func layout() {
         super.layout()
 
-        titleLabel.frame = NSRect(x: 14, y: 16, width: 120, height: 14)
+        iconView.frame = NSRect(x: 14, y: 13, width: 20, height: 20)
+        titleLabel.frame = NSRect(x: 42, y: 22, width: 120, height: 14)
+        subtitleLabel.frame = NSRect(x: 42, y: 10, width: 140, height: 12)
         quitButton.frame = NSRect(x: bounds.width - 78, y: 10, width: 64, height: 26)
     }
 
@@ -854,16 +911,16 @@ private final class FooterMenuView: NSView {
         super.draw(dirtyRect)
 
         let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let background = NSBezierPath(rect: bounds)
+        NSColor.labelColor.withAlphaComponent(isDark ? 0.018 : 0.012).setFill()
+        background.fill()
+
         let separator = NSBezierPath()
         separator.move(to: NSPoint(x: 12, y: bounds.height - 0.5))
         separator.line(to: NSPoint(x: bounds.width - 12, y: bounds.height - 0.5))
         separator.lineWidth = 0.5
         NSColor.separatorColor.withAlphaComponent(isDark ? 0.22 : 0.18).setStroke()
         separator.stroke()
-
-        let background = NSBezierPath(rect: bounds)
-        NSColor.labelColor.withAlphaComponent(isDark ? 0.018 : 0.012).setFill()
-        background.fill()
     }
 }
 
