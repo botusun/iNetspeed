@@ -154,11 +154,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         }
         appTrafficView = tv
         menu.addViewItem(tv, height: AppTrafficSectionView.fixedHeight)
-        menu.addItem(.separator())
 
-        let quit = NSMenuItem(title: "Quit iNetspeed", action: #selector(quit), keyEquivalent: "q")
-        quit.target = self
-        menu.addItem(quit)
+        let footer = FooterMenuView(width: Self.menuWidth, target: self, action: #selector(quit))
+        menu.addViewItem(footer, height: FooterMenuView.fixedHeight)
     }
 
     @objc private func quit() {
@@ -813,6 +811,59 @@ private final class AppTrafficRowView: NSView {
             ulLabel.textColor = .quaternaryLabelColor
             needsDisplay = true
         }
+    }
+}
+
+// MARK: - Footer Menu View
+
+@MainActor
+private final class FooterMenuView: NSView {
+    static let fixedHeight: CGFloat = 46
+
+    private let titleLabel = NSTextField(labelWithString: "iNetspeed")
+    private let quitButton = NSButton(title: "Quit", target: nil, action: nil)
+
+    init(width: CGFloat, target: AnyObject, action: Selector) {
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: Self.fixedHeight))
+
+        titleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        titleLabel.textColor = .secondaryLabelColor
+
+        quitButton.target = target
+        quitButton.action = action
+        quitButton.bezelStyle = .rounded
+        quitButton.controlSize = .small
+        quitButton.font = .systemFont(ofSize: 11, weight: .medium)
+        quitButton.image = NSImage(systemSymbolName: "power", accessibilityDescription: "Quit")
+        quitButton.imagePosition = .imageLeading
+        quitButton.contentTintColor = .secondaryLabelColor
+
+        [titleLabel, quitButton].forEach(addSubview)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func layout() {
+        super.layout()
+
+        titleLabel.frame = NSRect(x: 14, y: 16, width: 120, height: 14)
+        quitButton.frame = NSRect(x: bounds.width - 78, y: 10, width: 64, height: 26)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let separator = NSBezierPath()
+        separator.move(to: NSPoint(x: 12, y: bounds.height - 0.5))
+        separator.line(to: NSPoint(x: bounds.width - 12, y: bounds.height - 0.5))
+        separator.lineWidth = 0.5
+        NSColor.separatorColor.withAlphaComponent(isDark ? 0.22 : 0.18).setStroke()
+        separator.stroke()
+
+        let background = NSBezierPath(rect: bounds)
+        NSColor.labelColor.withAlphaComponent(isDark ? 0.018 : 0.012).setFill()
+        background.fill()
     }
 }
 
